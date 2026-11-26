@@ -2,6 +2,13 @@ import axios, { Axios } from 'axios';
 import { environment } from 'environments/environment';
 
 /**
+ * Name of the request header carrying the login token.
+ * Hyphens, not underscores: nginx and gunicorn drop request headers that contain
+ * underscores. The backend reads it as `u_id_token` (WSGI maps both to HTTP_U_ID_TOKEN).
+ */
+export const TOKEN_HEADER = 'u-id-token';
+
+/**
  * @author Bartjan Henkemans
  * The RequestHandler offers three methods to get, post or patch data.
  */
@@ -120,10 +127,10 @@ export class RequestHandler {
         'The method requires a session token which was not provided during instantation.'
       );
     } else if ((!authenticationReq && this.sessionToken !== undefined) || (!authenticationReq && this.sessionToken === undefined)) {
-      this.axiosInstance.defaults.headers.common['u_id_token'] = '';
+      this.axiosInstance.defaults.headers.common[TOKEN_HEADER] = '';
       return true;
     } else if (authenticationReq && this.sessionToken !== undefined) {
-      this.axiosInstance.defaults.headers.common['u_id_token'] = this.sessionToken;
+      this.axiosInstance.defaults.headers.common[TOKEN_HEADER] = this.sessionToken;
       return true;
     }
     return false;

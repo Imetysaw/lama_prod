@@ -224,7 +224,7 @@ The labelling results of a project can be downloaded from the **Statistics** pag
 * **CSV** is meant for spreadsheet programs. It is UTF-8 with a byte order mark so Excel opens it correctly. To protect against [formula injection](https://owasp.org/www-community/attacks/CSV_Injection), cells that start with `=`, `+`, `-` or `@` are prefixed with a `'`.
 * **JSON** contains the exact values and is meant for analysis scripts, e.g. `pandas.read_json("lama_project_1_labellings.json")`.
 
-The same data is available from the API at `GET /api/export/labellings?p_id=<project id>&format=csv|json` (send the login token in the `u_id_token` header).
+The same data is available from the API at `GET /api/export/labellings?p_id=<project id>&format=csv|json` (send the login token in the `u-id-token` header).
 
 ### Advanced features
 

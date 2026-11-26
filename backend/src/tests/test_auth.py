@@ -5,7 +5,7 @@ from src import db
 from src.models.auth_models import User, UserStatus
 from src.routes.auth_routes import taken, check_format
 from werkzeug.security import check_password_hash
-from jwt import decode
+from jwt import decode, encode
 from src.conftest import RequestHandler
 
 def test_register(app, client):
@@ -351,3 +351,16 @@ def register_helper(app, client, registration_details, expected_text, expected_c
 
             # Note: since we did not implement super admin approval of users, the status defaults to approved
             assert entry.status == UserStatus.approved
+
+def test_token_header_with_hyphens(app, client):
+    """
+    The frontend sends the token as `u-id-token`, because nginx and gunicorn drop
+    request headers containing underscores. The backend must accept that spelling.
+    """
+    token = encode({'u_id_token': 1}, app.secret_key, algorithm='HS256')
+    response = client.get('/auth/check_login', headers={'u-id-token': token})
+    assert response.status_code == 200
+
+    # Without a token the request is rejected
+    response = client.get('/auth/check_login')
+    assert response.status_code == 401
