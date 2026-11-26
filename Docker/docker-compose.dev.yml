@@ -1,0 +1,78 @@
+# LaMa - DEVELOPMENT setup (plain HTTP, no certificates)
+#
+#   docker compose --env-file .env -f Docker/docker-compose.dev.yml up --build -d
+#
+# App:        http://localhost:${HTTP_PORT}  (default http://localhost:8080)
+# API:        http://localhost:${FLASK_RUN_PORT}  (also proxied at /api)
+# PhpMyAdmin: http://localhost:${PMA_PORT}
+# Backend code in backend/src is mounted into the container and reloads on change.
+name: lama-dev
+
+services:
+  lama-frontend:
+    build:
+      context: ../
+      dockerfile: ./frontend/Dockerfile
+      args:
+        API_URL: ${PROD_API_URL:-/api}
+    environment:
+      NGINX_MODE: http
+    ports:
+      - "${HTTP_PORT:-8080}:80"
+    depends_on:
+      lama-flask:
+        condition: service_healthy
+    restart: unless-stopped
+
+  lama-flask:
+    build:
+      context: ../
+      dockerfile: ./backend/Dockerfile
+    env_file: ../.env
+    environment:
+      IN_DOCKER_CONTAINER: 1
+      APP_ENV: development
+    depends_on:
+      lama-db:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${FLASK_RUN_PORT:-5000}:5000"
+    volumes:
+      - migrationsData:/app/migrations
+      - ../backend/src:/app/src
+    restart: unless-stopped
+
+  lama-db:
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${DATABASE_NAME}
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - "127.0.0.1:${DB_PORT:-3306}:3306"
+    volumes:
+      - mysqlData:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+    restart: unless-stopped
+
+  lama-phpmyadmin:
+    image: phpmyadmin:5.2
+    environment:
+      PMA_HOST: lama-db
+      PMA_PORT: 3306
+    ports:
+      - "127.0.0.1:${PMA_PORT:-81}:80"
+    depends_on:
+      lama-db:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  mysqlData:
+  migrationsData:

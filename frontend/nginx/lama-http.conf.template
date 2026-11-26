@@ -1,0 +1,16 @@
+# HTTP only. Used for development, and in production until the first
+# Let's Encrypt certificate has been obtained.
+server {
+    listen       80;
+    server_name  ${DOMAIN};
+    server_tokens off;
+
+    include /etc/nginx/lama/security-headers.conf;
+
+    # Let's Encrypt HTTP-01 challenges (written by the certbot container)
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+
+    include /etc/nginx/lama/lama-locations.conf;
+}

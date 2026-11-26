@@ -1,0 +1,98 @@
+# LaMa - PRODUCTION setup (HTTPS with automatically renewed Let's Encrypt certificates)
+#
+#   cp .env.prod.example .env.prod   # and fill it in
+#   docker compose --env-file .env.prod -f Docker/docker-compose.prod.yml up --build -d
+#
+# Only nginx (lama-frontend) is published, on ports 80 and 443. The API is reachable
+# through nginx at https://${DOMAIN}/api; the database and backend are not published.
+# PhpMyAdmin is only started with `--profile tools` and only listens on 127.0.0.1.
+name: lama
+
+services:
+  lama-frontend:
+    build:
+      context: ../
+      dockerfile: ./frontend/Dockerfile
+      args:
+        API_URL: ${PROD_API_URL:-/api}
+    environment:
+      NGINX_MODE: ${NGINX_MODE:-https}
+      DOMAIN: ${DOMAIN:?Set DOMAIN in .env.prod}
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+    volumes:
+      - certbotConf:/etc/letsencrypt:ro
+      - certbotWww:/var/www/certbot:ro
+    depends_on:
+      lama-flask:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Obtains the certificate on first start and tries to renew it twice a day.
+  # nginx reloads itself every 6 hours to pick up renewed certificates.
+  lama-certbot:
+    image: certbot/certbot:v5.10.0
+    entrypoint: ["/bin/sh", "/lama/certbot-entrypoint.sh"]
+    environment:
+      NGINX_MODE: ${NGINX_MODE:-https}
+      DOMAIN: ${DOMAIN:?Set DOMAIN in .env.prod}
+      CERTBOT_EMAIL: ${CERTBOT_EMAIL:-}
+      CERTBOT_STAGING: ${CERTBOT_STAGING:-0}
+    volumes:
+      - ./certbot/certbot-entrypoint.sh:/lama/certbot-entrypoint.sh:ro
+      - certbotConf:/etc/letsencrypt
+      - certbotWww:/var/www/certbot
+    depends_on:
+      - lama-frontend
+    restart: unless-stopped
+
+  lama-flask:
+    build:
+      context: ../
+      dockerfile: ./backend/Dockerfile
+    env_file: ../.env.prod
+    environment:
+      IN_DOCKER_CONTAINER: 1
+      APP_ENV: production
+    depends_on:
+      lama-db:
+        condition: service_healthy
+    volumes:
+      - migrationsData:/app/migrations
+    restart: unless-stopped
+
+  lama-db:
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?Set DB_ROOT_PASSWORD in .env.prod}
+      MYSQL_DATABASE: ${DATABASE_NAME}
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env.prod}
+    volumes:
+      - mysqlData:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+    restart: unless-stopped
+
+  lama-phpmyadmin:
+    image: phpmyadmin:5.2
+    profiles: ["tools"]
+    environment:
+      PMA_HOST: lama-db
+      PMA_PORT: 3306
+    ports:
+      - "127.0.0.1:${PMA_PORT:-8081}:80"
+    depends_on:
+      lama-db:
+        condition: service_healthy
+
+volumes:
+  mysqlData:
+  migrationsData:
+  certbotConf:
+  certbotWww:

@@ -227,7 +227,8 @@ def project_conflicts(p_id, admin, u_id):
     # Add a dictionary of conflict data to the list of dictionaries
     for conflict in conflicts:
         # Get the users involved in this conflicts
-        users = set(conflict_artifacts[conflict[0]].users)
+        # Sorted by id so the output order is deterministic
+        users = sorted(set(conflict_artifacts[conflict[0]].users), key=lambda u: u.id)
         # Add information to a dictionary
         info = {
             "a_id": conflict[0],

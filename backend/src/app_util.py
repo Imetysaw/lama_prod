@@ -4,7 +4,7 @@ Authors: Eduardo Costa Martins
 
 import re
 from jwt import decode
-from jwt.exceptions import InvalidSignatureError
+from jwt.exceptions import PyJWTError
 from functools import wraps
 from src import db  # need this in every route
 from flask import current_app as app
@@ -18,7 +18,7 @@ def check_args(required, args):
     """
     @param required : a list of arguments needed for the backend method
     @param args : a dictionary of arguments supplied from the frontend
-    @return : True <=> all required arguments supplied /\ no extra arguments supplied
+    @return : True <=> all required arguments supplied AND no extra arguments supplied
     """
     if all(arg in args for arg in required):  # All arguments supplied
         # Check no extra arguments supplied
@@ -94,7 +94,7 @@ def check_password(password):
 
 def check_string(strings):
     """
-    Checks the given string for the characters \ ; , #
+    Checks the given string for the characters \\ ; , #
     @params strings: list of input strings
     @return whether the string input includes a forbidden character
     """
@@ -135,6 +135,18 @@ def get_all_subclasses(cls):
     return all_subclasses
 
 
+def decode_token(u_id_token):
+    """
+    @param u_id_token : the login token sent by the frontend
+    @return : the user id stored in the token, or None if the token is
+        malformed, signed with a different key or expired
+    """
+    try:
+        return decode(u_id_token, app.secret_key, algorithms=['HS256'])['u_id_token']
+    except (PyJWTError, KeyError, TypeError):
+        return None
+
+
 def login_required(f):
     from src.models.auth_models import User, UserStatus
     """
@@ -151,10 +163,11 @@ def login_required(f):
         u_id_token = request.headers.get('u_id_token')
         if u_id_token is None or u_id_token == '':
             return make_response('Authentication token not provided', 401)
+        u_id = decode_token(u_id_token)
+        if u_id is None:
+            # Token is malformed, signed incorrectly or expired
+            return make_response('Unauthorized', 401)
         try:
-            # Decode the token
-            u_id = decode(u_id_token, app.secret_key,
-                          algorithms=['HS256'])['u_id_token']
             # Fetch user with corresponding id
             user = db.session.get(User, u_id)
             # Check to see if user exists
@@ -171,9 +184,6 @@ def login_required(f):
         except OperationalError:
             # Database error
             return make_response('Service Unavailable', 503)
-        except InvalidSignatureError:
-            # Token is signed incorrectly
-            return make_response('3 Unauthorized', 401)
     return decorated_function
 
 
@@ -193,10 +203,11 @@ def super_admin_required(f):
         u_id_token = request.headers.get('u_id_token')
         if u_id_token is None or u_id_token == '':
             return make_response('Unauthorized', 401)
+        u_id = decode_token(u_id_token)
+        if u_id is None:
+            # Token is malformed, signed incorrectly or expired
+            return make_response('Unauthorized', 401)
         try:
-            # Decode the token
-            u_id = decode(u_id_token, app.secret_key,
-                          algorithms=['HS256'])['u_id_token']
             # Fetch user with corresponding id
             # Note that querying the super_admin table equates to querying the user table and checking the type
             # So instead we query the user table (same amount of work) and then we also get to see the difference
@@ -216,9 +227,6 @@ def super_admin_required(f):
         except OperationalError:
             # Database error
             return make_response('Service Unavailable', 503)
-        except InvalidSignatureError:
-            # Token is signed incorrectly
-            return make_response('3 Unauthorized', 401)
     return decorated_function
 
 

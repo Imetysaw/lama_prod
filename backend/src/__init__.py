@@ -12,25 +12,35 @@ from shutil import rmtree
 from secrets import token_hex
 from werkzeug.security import generate_password_hash
 from sqlalchemy import select
+from sqlalchemy.engine import URL
 from sqlalchemy.exc import OperationalError
 import click
+import logging
 
-# Add environment variables from file in root directory .env into process environment.
-# First get path to .env file
-dotenv_path = join(dirname(__file__), "../.env")
-# Add variables
-load_dotenv(dotenv_path)
-# Read environment variables
-IN_CONTAINER = environ.get("IN_DOCKER_CONTAINER", False)
-HOST = environ.get("DB_HOSTNAME") if IN_CONTAINER else "localhost"
-PORT = environ.get("DB_PORT")
-USERNAME = environ.get("DB_USER")
-PASSWORD = environ.get("DB_PASSWORD")
-DATABASE = environ.get("DATABASE_NAME")
-DIALECT = environ.get("DIALECT")
-DRIVER = environ.get("DRIVER")
-# This identifies the connection to the Dockerized database.
-URI = f"{DIALECT}+{DRIVER}://{USERNAME}:{PASSWORD}@{HOST}:{PORT}/{DATABASE}"
+# Add environment variables from a .env file into the process environment.
+# Variables that are already set (e.g. by docker compose `env_file`) take precedence.
+# We look for backend/.env first and then for the .env in the root of the repository,
+# so local development works without copying the file around.
+for dotenv_path in (join(dirname(__file__), "../.env"), join(dirname(__file__), "../../.env")):
+    if exists(dotenv_path):
+        load_dotenv(dotenv_path)
+
+
+def get_database_uri():
+    """
+    Builds the database URI from environment variables.
+    URL.create escapes special characters in the username/password.
+    """
+    in_container = environ.get("IN_DOCKER_CONTAINER", False)
+    port = environ.get("DB_PORT")
+    return URL.create(
+        drivername=f"{environ.get('DIALECT', 'mysql')}+{environ.get('DRIVER', 'mysqldb')}",
+        username=environ.get("DB_USER"),
+        password=environ.get("DB_PASSWORD"),
+        host=environ.get("DB_HOSTNAME") if in_container else "localhost",
+        port=int(port) if port else None,
+        database=environ.get("DATABASE_NAME"),
+    ).render_as_string(hide_password=False)
 
 # In the command line we have access to the `$ flask` command.
 # AppGroups allow us to define extensions for this command-line interface.
@@ -118,7 +128,10 @@ def create_app(config={'TESTING': False}):
         # This is an SQLite database stored in-memory.
         app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
     else:
-        app.config['SQLALCHEMY_DATABASE_URI'] = URI
+        app.config['SQLALCHEMY_DATABASE_URI'] = get_database_uri()
+        # Recycle connections before MySQL's wait_timeout closes them and
+        # check that a pooled connection is alive before using it.
+        app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {'pool_pre_ping': True, 'pool_recycle': 3600}
     # Set this configuration to True if you want to see all of the SQL generated
     app.config['SQLALCHEMY_ECHO'] = False
     # To suppress this warning.
@@ -144,8 +157,20 @@ def create_app(config={'TESTING': False}):
                 migrate(directory=str(mig_path))
                 upgrade(directory=str(mig_path))
 
-    # Generates a secret key for login use
-    app.secret_key = token_hex()
+    # Secret key used to sign the login tokens (JWT).
+    # In production this MUST be set (SECRET_KEY), so that all worker processes share
+    # the same key and sessions survive restarts. The random fallback is only meant for
+    # development and testing: every process gets a different key.
+    secret_key = environ.get("SECRET_KEY")
+    if not secret_key:
+        if not config['TESTING']:
+            logging.getLogger(__name__).warning(
+                "SECRET_KEY is not set, generating a random one. "
+                "Users will be logged out on every restart.")
+        secret_key = token_hex(32)
+    app.secret_key = secret_key
+    # How long a login token stays valid
+    app.config['TOKEN_EXPIRY_HOURS'] = float(environ.get("TOKEN_EXPIRY_HOURS") or 24)
 
     # Allows the Flask CLI to use the `db-safe` commands.
     app.cli.add_command(db_safe)
@@ -163,9 +188,15 @@ def create_app(config={'TESTING': False}):
     app.register_blueprint(conflict_routes.conflict_routes)
     app.register_blueprint(theme_routes.theme_routes)
     app.register_blueprint(change_routes.change_routes)
+    app.register_blueprint(export_routes.export_routes)
 
-    # Magic library that makes cross-origin resource sharing work.
-    CORS(app)
+    # Cross-origin resource sharing. In the docker setups the frontend and the API are
+    # served from the same origin (nginx proxies /api), so CORS is not needed there.
+    # CORS_ORIGINS is a comma separated list of allowed origins, e.g.
+    # "http://localhost:4200" for `ng serve`. Use "*" to allow every origin.
+    cors_origins = [o.strip() for o in environ.get("CORS_ORIGINS", "http://localhost:4200").split(",") if o.strip()]
+    if cors_origins:
+        CORS(app, origins=cors_origins)
 
     # For testing apps, additional teardown is required. This code is found in
     # conftest.py

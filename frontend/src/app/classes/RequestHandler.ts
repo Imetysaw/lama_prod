@@ -49,6 +49,22 @@ export class RequestHandler {
   }
 
   /**
+   * Sends a get request for a file (e.g. a CSV export) and returns it as a Blob.
+   * @param path : string, path where the resource is
+   * @param params : object, object of parameters
+   * @param auth : boolean, true means it will authenticate, false means it will not
+   * @returns the promise of a Blob
+   */
+  public async getFile(path: string, params: {}, auth: boolean): Promise<Blob> {
+    this.verifyAuthentication(auth);
+    const response = await this.axiosInstance.get(path, {
+      params: params,
+      responseType: 'blob',
+    });
+    return response.data;
+  }
+
+  /**
    * Sends a post request to the path with the parameters which have been provided.
    * @param path : string, path where the resource is
    * @param params : object, object of parameters

@@ -28,38 +28,83 @@ For deployment using docker:
 
 For development these are the dependencies/tools without which LaMa may not work:
 
-1. [NodeJS](https://nodejs.org/en/) ≥ 16.15
+1. [NodeJS](https://nodejs.org/en/) 16 (Angular 13 does not support newer versions)
 2. [AngularCLI](https://angular.io/guide/setup-local) ≥ 13.3.10
-3. [Python](https://www.python.org/) ≥ 3.10
+3. [Python](https://www.python.org/) ≥ 3.13
 4. pip ≥ 22.1.2
 5. [Docker](https://www.docker.com/) ≥ 20.10 (with compose plugin)
 6. IDE (optional, but recommended for easier development. We recommend [PyCharm](https://www.jetbrains.com/pycharm) for Backend and [VSCode](https://code.visualstudio.com/) for Frontend)
 
 ## <a name="installation"></a>Installation
 
-Assuming that you have all the necessary dependencies installed.
+Assuming that you have all the necessary dependencies installed, clone the repository and open a terminal in its root directory. There are two docker setups:
 
-1. Clone repository
-2. Navigate to the repository in a terminal
-3. To start the application run:
+| | Development | Production |
+|---|---|---|
+| Compose file | `Docker/docker-compose.dev.yml` | `Docker/docker-compose.prod.yml` |
+| Configuration | `.env` (committed, insecure defaults) | `.env.prod` (create from `.env.prod.example`, git-ignored) |
+| Protocol | HTTP on port 8080 (`HTTP_PORT`) | HTTPS on 443 (Let's Encrypt, renewed automatically), HTTP on 80 redirects |
+| Backend | Flask dev server with auto-reload, also published on `127.0.0.1:5000` | gunicorn, only reachable through nginx at `/api` |
+| Database / PhpMyAdmin | published on `127.0.0.1` | not published; PhpMyAdmin only with `--profile tools`, on `127.0.0.1` |
+
+In both setups nginx (the `lama-frontend` container) serves the Angular app and proxies `/api` to the backend, so the browser only talks to a single origin.
+
+### Development
+
 ```
-docker compose --env-file .env -f Docker/docker-compose.yml up --build -d
+docker compose --env-file .env -f Docker/docker-compose.dev.yml up --build -d
+docker compose --env-file .env -f Docker/docker-compose.dev.yml down
 ```
 
-4. To shut down the application run:
+LaMa now runs on [localhost:8080](http://localhost:8080). The default login is `admin` / `password`. PhpMyAdmin runs on [localhost:81](http://localhost:81).
+
+### Production (HTTPS)
+
+Requirements: a server with Docker, a DNS name (e.g. `lama.example.org`) whose A/AAAA record points to the server, and **ports 80 and 443 open to the internet** (Let's Encrypt validates the domain over port 80). On SURF Research Cloud, make sure the workspace's security group / firewall allows inbound 80 and 443.
+
+1. Create the production configuration and fill it in. Set `DOMAIN` and `CERTBOT_EMAIL`, and replace every `CHANGE_ME` (generate secrets with `openssl rand -hex 32`). The backend refuses to start while `SECRET_KEY`, `DB_PASSWORD` or `SUPER_PASSWORD` are still `CHANGE_ME`.
 ```
-docker compose --env-file .env -f Docker/docker-compose.yml down
+cp .env.prod.example .env.prod
+```
+2. Make sure nothing else on the server uses port 80 or 443 (see [Troubleshooting](#troubleshooting)).
+3. Start LaMa:
+```
+docker compose --env-file .env.prod -f Docker/docker-compose.prod.yml up --build -d
+```
+4. Follow the certificate request with `docker compose --env-file .env.prod -f Docker/docker-compose.prod.yml logs -f lama-certbot`. Until the certificate is issued nginx serves plain HTTP; within a minute after it is issued nginx switches to HTTPS by itself.
+
+How the certificates work:
+* The `lama-certbot` container requests the certificate on first start (HTTP-01 challenge via the webroot served by nginx) and retries every 15 minutes if that fails.
+* It runs `certbot renew` every 12 hours. Certbot only renews certificates that expire within 30 days.
+* nginx reloads itself every 6 hours, so renewed certificates are picked up without a restart.
+* Certificates are stored in the `certbotConf` docker volume, so they survive restarts and rebuilds.
+* To test the setup without hitting Let's Encrypt's rate limits, set `CERTBOT_STAGING=1` first. Staging certificates are not trusted by browsers. Before switching to real certificates, remove the certificate volumes: `docker compose --env-file .env.prod -f Docker/docker-compose.prod.yml down && docker volume rm lama_certbotConf lama_certbotWww`.
+
+If the server already runs a reverse proxy that terminates TLS (and you cannot or may not stop it), set `NGINX_MODE=http` and `HTTP_PORT` to a free port (e.g. `8080`), and point the existing proxy at `http://localhost:8080`. The certbot container then stays idle.
+
+PhpMyAdmin (only if needed): `docker compose --env-file .env.prod -f Docker/docker-compose.prod.yml --profile tools up -d lama-phpmyadmin`, then open an SSH tunnel with `ssh -L 8081:localhost:8081 <server>` and browse to [localhost:8081](http://localhost:8081).
+
+Updating: `git pull`, then run the `up --build -d` command again. Data is kept in the `mysqlData` volume. Back up the database with:
+```
+docker compose --env-file .env.prod -f Docker/docker-compose.prod.yml exec lama-db sh -c 'mysqldump -u root -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE"' > lama-backup.sql
 ```
 
-You should now have LaMa running in your browser. By default, the frontend server runs on [localhost](http://localhost) and default login credentials are `admin` as username & `password` as password.
+### <a name="troubleshooting"></a>Troubleshooting
 
-### Setup for development
+**`failed to bind host port 0.0.0.0:80/tcp: address already in use`**: another program on the server already listens on port 80 (often a web server installed on the host, e.g. nginx or Apache). Find it with:
+```
+sudo ss -ltnp 'sport = :80'
+sudo ss -ltnp 'sport = :443'
+```
+Then either stop and disable it, e.g. `sudo systemctl disable --now nginx` (or `apache2`), or, if it has to stay, use the `NGINX_MODE=http` setup described above. If it is an old LaMa container, find it with `docker ps` and stop it. For development you can pick any free port with `HTTP_PORT` in `.env`.
+
+### Setup for development without docker
 
 Database:
 1. Open a terminal in the root directory of the repository
 2. Start the database with:
 ```
-docker compose --env-file .env -f Docker/docker-compose-db.yml up --build -d
+docker compose --env-file .env -f Docker/docker-compose-db.yml up -d
 ```
 3. Shut down the database with:
 ```
@@ -68,44 +113,43 @@ docker compose --env-file .env -f Docker/docker-compose-db.yml down
 
 Frontend:
 1. Open a terminal in the frontend directory
-2. Run `npm i`
-3. Create the environment variables, `npx tsx .\src\setenv.ts`
-4. Run `ng serve`
-5. The frontend server will run on localhost:4200
+2. Run `npm ci` (Angular 13 requires Node 16)
+3. Run `npm start` (creates the environment file from `.env` and runs `ng serve`)
+4. The frontend server will run on localhost:4200 and talk to the backend on localhost:5000
 
 Backend:
-1. Set the `FLASK_ENV` environment variable to `development`
-2. Open a terminal in the backend directory
-3. On your first time create a virtual environment with `python -m venv venv`
-4. Activate your virtual environment, `.\venv\Scripts\activate` on Windows or `source venv/bin/activate` on Linux
-5. Run `pip install -r requirements.txt`
-6. Run the following commands:
+1. Open a terminal in the backend directory
+2. On your first time create a virtual environment with `python -m venv venv` (Python 3.13)
+3. Activate your virtual environment, `.\venv\Scripts\activate` on Windows or `source venv/bin/activate` on Linux
+4. Run `pip install -r requirements-dev.txt`
+5. Run the following commands (the `.env` in the root of the repository is loaded automatically):
 ```
 flask db-safe init
 flask db migrate
 flask db upgrade
 flask db-safe add-super-admin
-flask run --host=0.0.0.0
+flask run --host=0.0.0.0 --debug
 ```
-7. On teardown do not forget to revert the `FLASK_ENV` environment variable to `production`, and run `deactivate` to deactivate the virtual environment
+6. Run `deactivate` to deactivate the virtual environment
 
 ### Environment variables
 
-The Environment variables can be found in the .env file in the root of the repository. Here all of the default values for the necessary variables are set. If one wants to change any of these variables they should change the values in this file.
+Development uses the `.env` file in the root of the repository; production uses `.env.prod` (see `.env.prod.example`, which documents every variable). The files are divided into sections:
 
-The file is divided into sections:
+1) Domain & HTTPS (production only) - `DOMAIN`, `CERTBOT_EMAIL`, `CERTBOT_STAGING`, `NGINX_MODE` (`https` or `http`) and the published ports `HTTP_PORT` / `HTTPS_PORT`.
+2) Database - these are all the variables that have anything to do with the database, such as the database port, database login details etc.
+3) PhpMyAdmin - the port PhpMyAdmin is published on (on 127.0.0.1 only).
+4) LaMa Config - these variables define the superadmin username and password. Please note that a superadmin is created by default who has access to all the projects and their contents. The AUTO_APPROVAL variable determines whether new accounts are approved by default, or must be approved by super admins; it should parse as a boolean.
+5) Flask Server - `APP_ENV` (`development` runs the Flask dev server, `production` runs gunicorn), `SECRET_KEY` (signs the login tokens; required in production), `TOKEN_EXPIRY_HOURS`, `GUNICORN_WORKERS` and `CORS_ORIGINS` (origins that may call the API directly; only needed for `ng serve`).
+6) Frontend - `API_URL` is the backend URL used by `ng serve`, `PROD_API_URL` the one baked into production builds (`/api`, proxied by nginx).
 
-1) Database - these are all the variables that have anything to do with the database, such as the database port, database login details etc.
-2) PhPMyadmin - this is where the port for the phpmyadmin is defined
-3) LaMa Config -  these variables defines the superadmin username and password. Please, note that a superadmin is created by default who has access of all the projects and their contents. The AUTO_APPROVAL variable determines whether new accounts are approved by default, or must be approved by super admins, it should parse as a boolean.
-4) Flask Server - these are the variables needed to run the flask server.
-5) Frontend Server - these are two variables for the urls to the backend server. The frontend uses these variables to interact with the apis provided by the backend.
+Secrets are passed to the containers at runtime and are not baked into the docker images.
 
 ### Sample Database
 
 With the database running do the following:
 
-1) Go the PMA, which runs on localhost:81 by default.
+1) Go the PMA, which runs on localhost:81 by default in development.
 2) In the lama database, check all tables and _drop_ them. You _will_ lose all your data.
 3) Go to the import tab, choose the `sample.sql` file found in the root of the repository, and press Go.
 
@@ -157,6 +201,17 @@ Clicking the **resolve conflict** button will resolve the conflict if the labels
 
 ![alt text](https://github.com/muctadir/lama/blob/main/images/SS7M.png?raw=true)
 
+### Exporting labels
+
+The labelling results of a project can be downloaded from the **Statistics** page with the **Export labels (CSV)** and **Export labels (JSON)** buttons. Project admins get the labellings of every user; other members get only their own. The export has one row per artifact, label type and labeller, with the columns:
+
+`artifact_id`, `artifact_identifier`, `artifact_text`, `parent_artifact_id` (set for artifacts created by splitting), `label_type`, `label`, `label_description`, `themes` (the themes of the label, separated by `; `), `labeller`, `remark`, `labelling_time`.
+
+* **CSV** is meant for spreadsheet programs. It is UTF-8 with a byte order mark so Excel opens it correctly. To protect against [formula injection](https://owasp.org/www-community/attacks/CSV_Injection), cells that start with `=`, `+`, `-` or `@` are prefixed with a `'`.
+* **JSON** contains the exact values and is meant for analysis scripts, e.g. `pandas.read_json("lama_project_1_labellings.json")`.
+
+The same data is available from the API at `GET /api/export/labellings?p_id=<project id>&format=csv|json` (send the login token in the `u_id_token` header).
+
 ### Advanced features
 
 For a full list of features we refer the reader to the **Software User Manual (SUM)**, below we will briefly describe some of the more important advanced features for common use cases.
@@ -189,7 +244,7 @@ ng test
 1. Navigate to the backend folder on the terminal
 2. To install the required dependencies run the command:
 ```
-pip install -r requirements.txt
+pip install -r requirements-dev.txt
 ```
 3. After this command has executed succesfully, run the back-end test cases using the command:
 ```

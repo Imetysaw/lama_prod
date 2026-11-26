@@ -6,6 +6,7 @@ import { Project } from 'app/classes/project';
 import { ProjectDataService } from 'app/services/project-data.service';
 import { ReroutingService } from 'app/services/rerouting.service';
 import { StatsDataService } from 'app/services/stats-data.service';
+import { ToastCommService } from 'app/services/toast-comm.service';
 
 
 @Component({
@@ -35,6 +36,9 @@ export class StatsComponent implements OnInit {
   // Indicates whether the project is frozen
   frozen = true;
 
+  // Indicates whether an export is being downloaded
+  exporting = false;
+
   /**
    * Initializes the router, StatsDataService, ProjectDataService, ReroutingService
    * and sets some default values
@@ -47,7 +51,8 @@ export class StatsComponent implements OnInit {
   constructor(private router: Router,
     private statsDataService: StatsDataService,
     private projectDataService: ProjectDataService,
-    private routeService: ReroutingService) {
+    private routeService: ReroutingService,
+    private toastCommService: ToastCommService) {
     this.url = this.router.url;
     this.p_id = Number(this.routeService.getProjectID(this.url));
     this.project = new Project(0, "", "");
@@ -104,6 +109,23 @@ export class StatsComponent implements OnInit {
     const data = await this.statsDataService.getUserStats(p_id)
     // Pass the user statistics
     this.user_contribution = data
+  }
+
+  /**
+   * Downloads the labellings of the project
+   *
+   * @param format 'csv' or 'json'
+   * @trigger an export button is pressed
+   */
+  async exportLabellings(format: 'csv' | 'json'): Promise<void> {
+    this.exporting = true;
+    try {
+      await this.statsDataService.exportLabellings(this.p_id, format);
+    } catch (e) {
+      this.toastCommService.emitChange([false, "Exporting the labels failed, please try again."]);
+    } finally {
+      this.exporting = false;
+    }
   }
 
   /**

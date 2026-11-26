@@ -17,5 +17,7 @@ __all__ = [
     'artifact_routes',
     'conflict_routes',
     # Routes for getting the change history of items
-    'change_routes'
+    'change_routes',
+    # Routes for exporting project data (e.g. labellings as CSV)
+    'export_routes'
 ]

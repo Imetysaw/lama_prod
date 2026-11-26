@@ -75,4 +75,30 @@ export class StatsDataService {
     // Make a request to the backend to get user statistics
     return await this.requestHandler.get('/project/projectStats', { 'p_id': p_id }, true)
   }
+
+  /**
+   * Downloads the labellings of a project as a file.
+   * Project admins get the labellings of all users, other members only their own.
+   *
+   * @params p_id: number
+   * @params format: 'csv' (for spreadsheets) or 'json' (exact values, for scripts)
+   * @pre p_id => 1
+   * @throws Error if p_id < 1
+   */
+  async exportLabellings(p_id: number, format: 'csv' | 'json'): Promise<void> {
+    if (p_id < 1) throw new Error("p_id cannot be less than 1");
+
+    const file = await this.requestHandler.getFile(
+      '/export/labellings', { 'p_id': p_id, 'format': format }, true);
+
+    // Let the browser save the file
+    const url = URL.createObjectURL(file);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `lama_project_${p_id}_labellings.${format}`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }
 }

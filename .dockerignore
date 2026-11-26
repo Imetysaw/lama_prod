@@ -1,0 +1,19 @@
+# The docker build context is the repository root (see Docker/*.yml).
+# Keep secrets, local build output and dependencies out of the images.
+.git
+.github
+.idea
+.env
+.env.*
+paper
+images
+**/__pycache__
+**/*.pyc
+backend/venv
+backend/migrations
+backend/migrations-test
+backend/.idea
+frontend/node_modules
+frontend/dist
+frontend/.angular
+frontend/coverage

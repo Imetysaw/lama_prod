@@ -4,6 +4,7 @@ import { RouterTestingModule } from '@angular/router/testing';
 import { Router } from '@angular/router';
 import { StatsComponent } from './stats.component';
 import { Project } from 'app/classes/project';
+import { ToastCommService } from 'app/services/toast-comm.service';
 
 describe('StatsComponent', () => {
   /* Objects to be used in testing */
@@ -118,5 +119,28 @@ describe('StatsComponent', () => {
     // Check if reRouter navigates to the labelling page
     expect(router.navigate).toHaveBeenCalledWith(['/project', '5', 'labelling-page']);
 
+  });
+
+  it('should export the labellings', async () => {
+    // Spy on statsDataService.exportLabellings and stub the call
+    spyOn(statsDataService, 'exportLabellings').and.returnValue(Promise.resolve());
+
+    await component.exportLabellings('csv');
+
+    // Check that the export was requested for the right project and format
+    expect(statsDataService.exportLabellings).toHaveBeenCalledWith(p_id, 'csv');
+    // The buttons are enabled again afterwards
+    expect(component.exporting).toBeFalse();
+  });
+
+  it('should show a toast when the export fails', async () => {
+    const toastCommService = TestBed.inject(ToastCommService);
+    spyOn(statsDataService, 'exportLabellings').and.returnValue(Promise.reject(new Error('failed')));
+    spyOn(toastCommService, 'emitChange');
+
+    await component.exportLabellings('json');
+
+    expect(toastCommService.emitChange).toHaveBeenCalledWith([false, jasmine.any(String)]);
+    expect(component.exporting).toBeFalse();
   });
 });

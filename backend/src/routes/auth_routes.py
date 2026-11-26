@@ -13,6 +13,7 @@ from sqlalchemy.orm.exc import NoResultFound
 from sqlalchemy.exc import OperationalError
 from werkzeug.security import generate_password_hash, check_password_hash
 from jwt import encode
+from datetime import datetime, timedelta, timezone
 
 auth_routes = Blueprint("auth", __name__, url_prefix="/auth")
 
@@ -99,7 +100,8 @@ def check_super_admin():
 
 def login_user(u_id):
     # Encode user id
-    token = encode({'u_id_token': u_id}, app.secret_key, algorithm='HS256')
+    expires = datetime.now(timezone.utc) + timedelta(hours=app.config.get('TOKEN_EXPIRY_HOURS', 24))
+    token = encode({'u_id_token': u_id, 'exp': expires}, app.secret_key, algorithm='HS256')
     # Return id in headers
     resp = make_response("Success")
     resp.headers['u_id_token'] = token
