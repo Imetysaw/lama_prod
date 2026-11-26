@@ -93,3 +93,23 @@ def test_check_whitespaces():
     assert check_whitespaces(["    Hello"]) == True
     assert check_whitespaces(["    Hello   "]) == True
     assert check_whitespaces(["Hello"]) == False
+
+
+def test_hash_password_fits_column():
+    """
+    The hash must fit in the password column. SQLite (used by the tests) does not
+    enforce String lengths, but MySQL does, so check the length explicitly.
+    """
+    from src.app_util import hash_password
+    from src.models.auth_models import User
+    from werkzeug.security import check_password_hash, generate_password_hash
+
+    max_length = User.__table__.c.password.type.length
+    hashed = hash_password("A-l0ng_and_c0mplex_password!" * 2)
+    assert len(hashed) <= max_length
+    assert check_password_hash(hashed, "A-l0ng_and_c0mplex_password!" * 2)
+    assert not check_password_hash(hashed, "wrong")
+
+    # Hashes created by the previous Werkzeug default still verify
+    old_hash = generate_password_hash("password", method="pbkdf2:sha256:260000")
+    assert check_password_hash(old_hash, "password")

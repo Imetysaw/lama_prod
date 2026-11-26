@@ -11,6 +11,7 @@ from flask import current_app as app
 from flask import make_response, request
 from sqlalchemy.exc import OperationalError
 from inspect import getfullargspec
+from werkzeug.security import generate_password_hash
 from datetime import time
 from os import environ
 
@@ -133,6 +134,18 @@ def get_all_subclasses(cls):
         all_subclasses.update(get_all_subclasses(subclass))
 
     return all_subclasses
+
+
+def hash_password(password):
+    """
+    @param password : a plain text password
+    @return : the salted hash of the password, to be stored in the database
+    Werkzeug 3 defaults to scrypt, whose hashes (~162 characters) do not fit in the
+    password column (String(128)). PBKDF2-SHA256 hashes are ~103 characters, and
+    Werkzeug uses 1,000,000 iterations (OWASP recommends at least 600,000).
+    Hashes created with older versions still verify with check_password_hash.
+    """
+    return generate_password_hash(password, method="pbkdf2:sha256")
 
 
 def decode_token(u_id_token):

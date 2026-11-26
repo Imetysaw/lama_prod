@@ -4,14 +4,14 @@
 
 from operator import or_
 from src import db  # need this in every route
-from src.app_util import check_args, check_email, check_password, check_username, super_admin_required, login_required, check_string, check_whitespaces
+from src.app_util import check_args, check_email, check_password, check_username, super_admin_required, login_required, check_string, check_whitespaces, hash_password
 from src.models.auth_models import User, UserStatus
 from flask import current_app as app
 from flask import make_response, request, Blueprint, jsonify
 from sqlalchemy import select, or_
 from sqlalchemy.orm.exc import NoResultFound
 from sqlalchemy.exc import OperationalError
-from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.security import check_password_hash
 from jwt import encode
 from datetime import datetime, timedelta, timezone
 
@@ -116,7 +116,7 @@ def create_user(args):
     Converts email to lowercase
     """
     # Hash password
-    args["password"] = generate_password_hash(args["password"])
+    args["password"] = hash_password(args["password"])
     # Make email lowercase
     args["email"] = args["email"].lower()
     # Remove the second password that was send

@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 from pathlib import Path
 from shutil import rmtree
 from secrets import token_hex
-from werkzeug.security import generate_password_hash
+
 from sqlalchemy import select
 from sqlalchemy.engine import URL
 from sqlalchemy.exc import OperationalError
@@ -66,6 +66,7 @@ def click_add_super_admin():
 
     from src.models.auth_models import User, UserStatus
     from src.models.project_models import Project, Membership
+    from src.app_util import hash_password
 
     # This section creates the super admin upon initializing the database
     # The login details are retrieved from environment variables
@@ -87,7 +88,7 @@ def click_add_super_admin():
     db.session.add(User(
         username=SUPER_USER,
         email=SUPER_EMAIL,
-        password=generate_password_hash(SUPER_PASSWORD),
+        password=hash_password(SUPER_PASSWORD),
         status=UserStatus.approved,
         super_admin=True,
         description="Auto-generated super admin"

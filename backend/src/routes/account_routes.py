@@ -6,8 +6,8 @@ from src.app_util import check_args, check_email, check_password, check_username
 from flask import current_app as app
 from flask import make_response, request, Blueprint, jsonify
 from sqlalchemy import select, update, or_, and_
-from src.app_util import login_required, super_admin_required
-from werkzeug.security import generate_password_hash, check_password_hash
+from src.app_util import login_required, super_admin_required, hash_password
+from werkzeug.security import check_password_hash
 from sqlalchemy.exc import OperationalError
 
 account_routes = Blueprint("account", __name__, url_prefix="/account")
@@ -146,7 +146,7 @@ def edit_user_password(*, user):
         return make_response("Please enter a more secure password", 400)
 
     # Hash new password
-    hashed_password = generate_password_hash(args["newPassword"])
+    hashed_password = hash_password(args["newPassword"])
 
     # Change the users information
     db.session.execute(
