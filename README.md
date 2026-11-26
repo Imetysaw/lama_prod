@@ -80,7 +80,14 @@ How the certificates work:
 * Certificates are stored in the `certbotConf` docker volume, so they survive restarts and rebuilds.
 * To test the setup without hitting Let's Encrypt's rate limits, set `CERTBOT_STAGING=1` first. Staging certificates are not trusted by browsers. Before switching to real certificates, remove the certificate volumes: `docker compose --env-file .env.prod -f Docker/docker-compose.prod.yml down && docker volume rm lama_certbotConf lama_certbotWww`.
 
-If the server already runs a reverse proxy that terminates TLS (and you cannot or may not stop it), set `NGINX_MODE=http` and `HTTP_PORT` to a free port (e.g. `8080`), and point the existing proxy at `http://localhost:8080`. The certbot container then stays idle.
+If the server already runs a reverse proxy that terminates TLS (and you cannot or may not stop it, e.g. the nginx that SURF Research Cloud installs on workspaces), run LaMa behind it. Set this in `.env.prod`:
+```
+NGINX_MODE=http
+BIND_ADDRESS=127.0.0.1
+HTTP_PORT=8080
+HTTPS_PORT=8443
+```
+and point the existing proxy at `http://127.0.0.1:8080` (with `client_max_body_size 50m;` for artifact uploads). The certbot container then stays idle, and LaMa is only reachable through the existing proxy.
 
 PhpMyAdmin (only if needed): `docker compose --env-file .env.prod -f Docker/docker-compose.prod.yml --profile tools up -d lama-phpmyadmin`, then open an SSH tunnel with `ssh -L 8081:localhost:8081 <server>` and browse to [localhost:8081](http://localhost:8081).
 
