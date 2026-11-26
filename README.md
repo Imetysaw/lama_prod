@@ -89,6 +89,13 @@ HTTPS_PORT=8443
 ```
 and point the existing proxy at `http://127.0.0.1:8080` (with `client_max_body_size 50m;` for artifact uploads). The certbot container then stays idle, and LaMa is only reachable through the existing proxy.
 
+**SURF Research Cloud:** workspaces come with an nginx that already serves `https://<workspace>.src.surf-hosted.nl` with a certificate managed by SURF, and includes `/etc/nginx/app-location-conf.d/*.conf` in its HTTPS server block. Use the settings above, then install the provided snippet:
+```
+sudo cp Docker/surf/lama.conf /etc/nginx/app-location-conf.d/lama.conf
+sudo nginx -t && sudo systemctl reload nginx
+```
+The snippet contains commented-out lines to additionally restrict access to members of your SURF collaboration.
+
 PhpMyAdmin (only if needed): `docker compose --env-file .env.prod -f Docker/docker-compose.prod.yml --profile tools up -d lama-phpmyadmin`, then open an SSH tunnel with `ssh -L 8081:localhost:8081 <server>` and browse to [localhost:8081](http://localhost:8081).
 
 Updating: `git pull`, then run the `up --build -d` command again. Data is kept in the `mysqlData` volume. Back up the database with:
