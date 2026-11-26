@@ -5,13 +5,13 @@
 
 from src.models.project_models import Project
 from src.models import db
-from src.models.item_models import Artifact, Labelling, LabelType
+from src.models.item_models import Artifact, Labelling, LabelType, Highlight
 from src.models.change_models import ChangeType
 from src.models.project_models import Project
 from flask import jsonify, Blueprint, make_response, request
-from sqlalchemy import select, func, distinct
+from sqlalchemy import select, func, distinct, delete, update
 from src.app_util import login_required, not_frozen, in_project, check_args
-from sqlalchemy.exc import OperationalError
+from sqlalchemy.exc import OperationalError, IntegrityError
 from src.models.auth_models import User
 from src.search import search_func_all_res, best_search_results
 from hashlib import blake2b
@@ -96,7 +96,9 @@ def get_artifacts(*, user, membership):
     response = {
         'info': artifact_info,
         'nArtifacts': n_artifacts,
-        'nLabelTypes': n_label_types
+        'nLabelTypes': n_label_types,
+        # Whether the user may delete artifacts
+        'admin': membership.admin
     }
 
     # Return the list of dictionaries
@@ -659,3 +661,68 @@ def __check_artifact_access(admin, u_id, a_id):
             Labelling.a_id == a_id
         )) != None
     return True
+
+
+"""
+Deletes artifacts (project admins only). Artifacts that were split from a deleted
+artifact are deleted as well, together with all labellings, highlights and the change
+history of every deleted artifact. This cannot be undone.
+@params a dictionary of the form {
+    p_id: the project id,
+    a_ids: list of ids of the artifacts to delete
+}
+@returns {'deleted': list of ids of all deleted artifacts (including split children)}
+"""
+@artifact_routes.route("/delete", methods=["POST"])
+@login_required
+@in_project
+@not_frozen
+def delete_artifacts(*, membership):
+    if not membership.admin:
+        return make_response('Only project admins can delete artifacts', 401)
+
+    args = request.json
+    if not check_args(['p_id', 'a_ids'], args) or not isinstance(args['a_ids'], list) or not args['a_ids']:
+        return make_response('Bad Request', 400)
+
+    p_id = args['p_id']
+    try:
+        requested = {int(a_id) for a_id in args['a_ids']}
+    except (TypeError, ValueError):
+        return make_response('Bad Request', 400)
+
+    # Only artifacts of this project can be deleted
+    to_delete = set(db.session.scalars(
+        select(Artifact.id).where(Artifact.p_id == p_id, Artifact.id.in_(requested))
+    ).all())
+    if to_delete != requested:
+        return make_response('Artifact does not exist in this project', 400)
+
+    # Add all artifacts that were (recursively) split from the deleted artifacts
+    frontier = to_delete
+    while frontier:
+        frontier = set(db.session.scalars(
+            select(Artifact.id).where(Artifact.p_id == p_id, Artifact.parent_id.in_(frontier))
+        ).all()) - to_delete
+        to_delete |= frontier
+
+    ArtifactChange = Artifact.__change__
+    ids = list(to_delete)
+    try:
+        db.session.execute(delete(Labelling).where(Labelling.a_id.in_(ids))
+                           .execution_options(synchronize_session=False))
+        db.session.execute(delete(Highlight).where(Highlight.a_id.in_(ids))
+                           .execution_options(synchronize_session=False))
+        db.session.execute(delete(ArtifactChange).where(ArtifactChange.i_id.in_(ids))
+                           .execution_options(synchronize_session=False))
+        # Remove the split relations first, so the artifacts can be deleted in any order
+        db.session.execute(update(Artifact).where(Artifact.id.in_(ids)).values(parent_id=None)
+                           .execution_options(synchronize_session=False))
+        db.session.execute(delete(Artifact).where(Artifact.id.in_(ids))
+                           .execution_options(synchronize_session=False))
+        db.session.commit()
+    except (OperationalError, IntegrityError):
+        db.session.rollback()
+        return make_response('Internal Server Error', 503)
+
+    return make_response(jsonify({'deleted': sorted(ids)}), 200)

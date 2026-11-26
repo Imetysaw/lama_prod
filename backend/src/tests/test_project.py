@@ -177,7 +177,7 @@ def test_get_settings(app, client):
         assert project_3['criteria'] == project_3_info['criteria']
         assert project_3['frozen'] == project_3_info['frozen']
         assert project_3['users'] == [admin, user1, user10]
-        assert project_3['labelType'] == [{'label_type_id': 4, 'label_type_name': 'Code'}, {'label_type_id': 5, 'label_type_name': 'Language'}]
+        assert project_3['labelType'] == [{'label_type_id': 4, 'label_type_name': 'Code', 'n_labels': 0, 'n_labellings': 0}, {'label_type_id': 5, 'label_type_name': 'Language', 'n_labels': 0, 'n_labellings': 0}]
 
 # Test the "Edit" route for project editing
 def test_edit(app, client):

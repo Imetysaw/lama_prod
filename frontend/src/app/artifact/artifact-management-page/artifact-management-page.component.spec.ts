@@ -1,3 +1,6 @@
+import { MarkdownPipe } from 'app/markdown/markdown.pipe';
+import { MarkdownToggleComponent } from 'app/markdown/markdown-toggle.component';
+import { EventEmitter } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { FormBuilder, ReactiveFormsModule } from '@angular/forms';
 import { RouterTestingModule } from '@angular/router/testing';
@@ -27,7 +30,7 @@ describe('ArtifactManagementPageComponent', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      declarations: [ArtifactManagementPageComponent],
+      declarations: [ArtifactManagementPageComponent, MarkdownPipe, MarkdownToggleComponent],
       // Adding the RouterTestingModule dependency
       imports: [RouterTestingModule, ReactiveFormsModule, NgbModule],
       // Adds NgbActiveModal dependency
@@ -218,28 +221,35 @@ describe('ArtifactManagementPageComponent', () => {
     expect(component.nArtifacts).toEqual(3);
   })
 
-  // Checks that getNumberUsers emits an error toast if needed
-  it('should give an error toast and return \'Cannot compute\'', () => {
-    // Spy on the toastCommService.emitChange function and stub the call
-    spyOn(component['toastCommService'], 'emitChange');
+  // Checks that the number of labellers counts users, not labellings
+  it('should count the users that labelled an artifact', () => {
+    let artifact = new StringArtifact(1, 'IDENT', 'text');
+    expect(component.getNumberOfLabellers(artifact)).toEqual(0);
 
-    // nLabelTypes is 0 by default, so calling the function should trigger the toast
-    expect(component.getNumberUsers(10)).toEqual("Cannot compute");
-    expect(component['toastCommService'].emitChange).toHaveBeenCalled();
-
-    // Set the number of label types
-    component.nLabelTypes = 3
-    // Check if the function emits the toast
-    expect(component.getNumberUsers(10)).toEqual("Cannot compute");
-    expect(component['toastCommService'].emitChange).toHaveBeenCalled();
+    // User 1 labelled two label types, user 2 only one (e.g. a label type added later)
+    artifact.setLabellings([{u_id: 1, lt_id: 1}, {u_id: 1, lt_id: 2}, {u_id: 2, lt_id: 1}]);
+    expect(component.getNumberOfLabellers(artifact)).toEqual(2);
   })
 
-  // Checks that getNumberUsers returns the right value
-  it('should return the right value', () => {
-    // Set the number of label types
-    component.nLabelTypes = 2
+  // Checks that deleting an artifact asks for confirmation, calls the backend and reloads
+  it('should delete an artifact after confirmation', async () => {
+    const confirmEvent = new EventEmitter<boolean>();
+    spyOn(modalService, 'open').and.returnValue({componentInstance: {confirmEvent: confirmEvent}} as any);
+    const deleteSpy = spyOn(component['artifactDataService'], 'deleteArtifacts').and.returnValue(Promise.resolve([1]));
+    const reloadSpy = spyOn(component, 'getArtifacts').and.returnValue(Promise.resolve());
+    const toastSpy = spyOn(component['toastCommService'], 'emitChange');
 
-    // Call the function and check that it returns the right value
-    expect(component.getNumberUsers(10)).toEqual(5);
+    component.deleteArtifact(artifactss[0]);
+    expect(modalService.open).toHaveBeenCalled();
+    // Nothing is deleted before confirming
+    expect(deleteSpy).not.toHaveBeenCalled();
+
+    confirmEvent.emit(true);
+    await deleteSpy.calls.mostRecent().returnValue;
+    await new Promise(resolve => setTimeout(resolve));
+
+    expect(deleteSpy).toHaveBeenCalledWith(component.p_id, [1]);
+    expect(toastSpy).toHaveBeenCalledWith([true, 'Deleted artifact 1']);
+    expect(reloadSpy).toHaveBeenCalled();
   })
 });

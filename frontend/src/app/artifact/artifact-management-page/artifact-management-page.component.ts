@@ -4,8 +4,12 @@
 // Thea Bradley
 // Eduardo Costa Martins
 
-import { Component } from '@angular/core';
+import { Component, OnDestroy } from '@angular/core';
 import { NgbModal } from '@ng-bootstrap/ng-bootstrap';
+import { Subscription } from 'rxjs';
+import { ConfirmModalComponent } from 'app/modals/confirm-modal/confirm-modal.component';
+import { MarkdownPreferenceService } from 'app/markdown/markdown-preference.service';
+import { serverErrorMessage } from 'app/classes/errors';
 import { StringArtifact } from 'app/classes/stringartifact';
 import { Router } from '@angular/router';
 import { ReroutingService } from 'app/services/rerouting.service';
@@ -20,7 +24,7 @@ import { ProjectDataService } from 'app/services/project-data.service';
   templateUrl: './artifact-management-page.component.html',
   styleUrls: ['./artifact-management-page.component.scss']
 })
-export class ArtifactManagementPageComponent {
+export class ArtifactManagementPageComponent implements OnDestroy {
   // Initialize the ReroutingService
   routeService: ReroutingService;
   // Initialize the url
@@ -50,6 +54,13 @@ export class ArtifactManagementPageComponent {
   // Whether the project is frozen
   frozen = true;
 
+  // Whether the user is a project admin (admins can delete artifacts)
+  admin = false;
+
+  // Whether the artifact text is shown formatted as markdown
+  renderMarkdown = true;
+  private markdownSubscription: Subscription;
+
 
   /**
    * Constructor which:
@@ -62,11 +73,17 @@ export class ArtifactManagementPageComponent {
     private artifactDataService: ArtifactDataService,
     private router: Router, private formBuilder: FormBuilder,
     private toastCommService: ToastCommService,
-    private projectDataService: ProjectDataService) {
+    private projectDataService: ProjectDataService,
+    private markdownPreference: MarkdownPreferenceService) {
     this.routeService = new ReroutingService();
     this.url = this.router.url;
     this.p_id = Number(this.routeService.getProjectID(this.url))
     this.nLabelTypes = 0;
+    this.markdownSubscription = this.markdownPreference.enabled.subscribe(value => this.renderMarkdown = value);
+  }
+
+  ngOnDestroy(): void {
+    this.markdownSubscription.unsubscribe();
   }
 
   async ngOnInit(): Promise<void> {
@@ -113,6 +130,7 @@ export class ArtifactManagementPageComponent {
       const [seekIndex, seekPage] = this.getSeekInfo(this.page);
       // Get the artifacts for this page
       const result = await this.artifactDataService.getArtifacts(this.p_id, this.page, this.pageSize, seekIndex, seekPage);
+      this.admin = result[3] === true;
       // If the number of artifacts changed, then we need to reset the cache.
       if (result[0] != this.nArtifacts) {
         this.nArtifacts = result[0];
@@ -215,17 +233,56 @@ export class ArtifactManagementPageComponent {
   }
 
   /**
-   * Function that returns the number of users who gave a set of labellings
-   * @param labellings: number, the number of labellings
+   * Returns the number of users who labelled an artifact.
+   * Users are counted, not labellings: when a label type is added to a project later on,
+   * artifacts that were labelled before have no labelling of that type.
+   * @param artifact the artifact
    */
-  getNumberUsers(labellings: number): string | number{
-    if(this.nLabelTypes == 0 || labellings % this.nLabelTypes != 0) {
-      this.toastCommService.emitChange([false, "Something is wrong with the labellings"]);
-      return "Cannot compute";
+  getNumberOfLabellers(artifact: StringArtifact): number {
+    const labellings = artifact.getLabellings() ?? [];
+    return new Set(labellings.map((labelling: any) => labelling?.u_id)).size;
+  }
+
+  /**
+   * Keeps clicks on links inside the artifact text from opening the artifact
+   */
+  onTextClick(event: MouseEvent): void {
+    if ((event.target as HTMLElement)?.closest('a')) {
+      event.stopPropagation();
     }
-    else {
-      return Math.floor(labellings / this.nLabelTypes)
-    }
+  }
+
+  /**
+   * Deletes an artifact after confirmation
+   * @param artifact the artifact to delete
+   * @trigger user clicks the delete button of an artifact
+   */
+  deleteArtifact(artifact: StringArtifact): void {
+    const modalRef = this.modalService.open(ConfirmModalComponent, {});
+    modalRef.componentInstance.message =
+      `Artifact ${artifact.getId()} will be deleted permanently, together with all its labellings ` +
+      `and every artifact that was split from it.`;
+    modalRef.componentInstance.confirmEvent.subscribe(async () => {
+      try {
+        const deleted = await this.artifactDataService.deleteArtifacts(this.p_id, [artifact.getId()]);
+        this.toastCommService.emitChange([true,
+          deleted.length > 1 ? `Deleted artifacts ${deleted.join(', ')}` : `Deleted artifact ${artifact.getId()}`]);
+      } catch (e) {
+        this.toastCommService.emitChange([false, serverErrorMessage(e, 'The artifact could not be deleted')]);
+      }
+      // Reload the page of artifacts (also after a failure, to show the current state)
+      this.artifacts = {};
+      if (this.searchForm.value.search_term) {
+        await this.onEnter();
+      } else {
+        await this.getArtifacts();
+        // The last artifact of the last page was deleted: go one page back
+        if (this.page > 1 && (this.artifacts[this.page] ?? []).length == 0) {
+          this.page--;
+          await this.getArtifacts();
+        }
+      }
+    });
   }
 
 }

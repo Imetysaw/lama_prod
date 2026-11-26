@@ -1,3 +1,5 @@
+import { MarkdownPipe } from 'app/markdown/markdown.pipe';
+import { MarkdownToggleComponent } from 'app/markdown/markdown-toggle.component';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { RouterTestingModule } from '@angular/router/testing';
 import { SingleArtifactViewComponent } from './single-artifact-view.component';
@@ -76,7 +78,7 @@ describe('SingleArtifactViewComponent', () => {
     await TestBed.configureTestingModule({
       // Adds the RouterTestingModule and SingleArtifactViewComponent dependencies
       imports: [RouterTestingModule],
-      declarations: [SingleArtifactViewComponent],
+      declarations: [SingleArtifactViewComponent, MarkdownPipe, MarkdownToggleComponent],
       providers: [NgbActiveModal]
     })
     .compileComponents();

@@ -26,7 +26,7 @@ export class ArtifactDataService {
    * @throws Error if p_id < 1
    * @returns Promise<Array<StringArtifact>>
    */
-  async getArtifacts(p_id: number, page: number, pageSize: number, seekIndex: number, seekPage: number): Promise<[number, number, Array<StringArtifact>]> {
+  async getArtifacts(p_id: number, page: number, pageSize: number, seekIndex: number, seekPage: number): Promise<[number, number, Array<StringArtifact>, boolean?]> {
     // Check if the p_id is larger than 1
     if (p_id < 1) throw new Error("p_id cannot be less than 1");
 
@@ -61,9 +61,22 @@ export class ArtifactDataService {
       artifacts.push(artifactNew);
     });
 
-    // Return result
-    return [response['nArtifacts'], response['nLabelTypes'], artifacts];
+    // Return result (the last element: whether the user is a project admin)
+    return [response['nArtifacts'], response['nLabelTypes'], artifacts, response['admin'] === true];
 
+  }
+
+  /**
+   * Deletes artifacts, including every artifact that was split from them, and all their labellings.
+   * Only project admins can do this.
+   *
+   * @param p_id the project id
+   * @param a_ids ids of the artifacts to delete
+   * @returns the ids of all deleted artifacts (including split children)
+   */
+  async deleteArtifacts(p_id: number, a_ids: number[]): Promise<number[]> {
+    const response = await this.requestHandler.post('/artifact/delete', { 'p_id': p_id, 'a_ids': a_ids }, true);
+    return response['deleted'];
   }
 
 

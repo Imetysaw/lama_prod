@@ -1,3 +1,5 @@
+import { MarkdownPipe } from 'app/markdown/markdown.pipe';
+import { MarkdownToggleComponent } from 'app/markdown/markdown-toggle.component';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { FormArray, FormBuilder, Validators } from '@angular/forms';
 import { RouterTestingModule } from '@angular/router/testing';
@@ -24,7 +26,7 @@ describe('LabellingPageComponent', () => {
   // Adds router dependency
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      declarations: [LabellingPageComponent],
+      declarations: [LabellingPageComponent, MarkdownPipe, MarkdownToggleComponent],
       imports: [RouterTestingModule],
       providers: [NgbActiveModal, FormBuilder]
     })

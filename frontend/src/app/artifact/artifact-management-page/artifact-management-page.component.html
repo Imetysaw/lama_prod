@@ -23,8 +23,8 @@
             </span>
         </div>
 
-        <!-- row containing the search bar -->
-        <div class="row">
+        <!-- row containing the search bar and the markdown toggle -->
+        <div class="row align-items-center">
             <div class="col-5">
                 <div class="search__container">
                     <form [formGroup]="searchForm">
@@ -32,6 +32,9 @@
                             formControlName="search_term" (keyup.enter)="onEnter()">
                     </form>
                 </div>
+            </div>
+            <div class="col-4 offset-3 text-end" id="markdownToggleCol">
+                <app-markdown-toggle></app-markdown-toggle>
             </div>
         </div>
 
@@ -58,6 +61,8 @@
                                 <th scope="col" sortable="timesLabelled">
                                     <p class="timeslabelledHeader">Times Labelled</p>
                                 </th>
+                                <!-- Column for the delete buttons (admins only) -->
+                                <th *ngIf="admin" scope="col"></th>
                             </tr>
                         </thead>
 
@@ -70,11 +75,22 @@
                                 </td>
                                 <!-- Artifact text -->
                                 <td>
-                                    <p class="artifactText">{{artifact.getData()}}</p>
+                                    <p *ngIf="!renderMarkdown" class="artifactText">{{artifact.getData()}}</p>
+                                    <div *ngIf="renderMarkdown" class="artifactText artifactMarkdown markdown-body"
+                                        (click)="onTextClick($event)"
+                                        [innerHTML]="artifact.getData() | markdown"></div>
                                 </td>
                                 <!-- Times artifact is labelled -->
                                 <td>
-                                    <p class="timesLabelled">{{getNumberUsers(artifact.getNumberOfLabellings())}}</p>
+                                    <p class="timesLabelled">{{getNumberOfLabellers(artifact)}}</p>
+                                </td>
+                                <!-- Delete artifact (admins only) -->
+                                <td *ngIf="admin" class="deleteCol">
+                                    <button type="button" class="btn deleteArtifactButton" [disabled]="frozen"
+                                        id="{{ 'deleteArtifact-' + artifact.getId() }}" ngbTooltip="Delete artifact"
+                                        (click)="$event.stopPropagation(); deleteArtifact(artifact)">
+                                        <em class="bi bi-trash"></em>
+                                    </button>
                                 </td>
                             </tr>
                         </tbody>

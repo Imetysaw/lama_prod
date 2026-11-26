@@ -206,3 +206,27 @@ ngb-pagination ::ng-deep .page-link:not(:disabled):not(.disabled):active:focus {
         }
     }
 }
+// Artifact text formatted as markdown: long conversations scroll inside the cell
+.artifactMarkdown {
+    max-height: 22em;
+    overflow-y: auto;
+    letter-spacing: normal;
+    padding-right: 10px;
+    margin-bottom: 1rem;
+}
+
+// Delete artifact button
+.deleteCol {
+    vertical-align: middle;
+    width: 1%;
+}
+
+.deleteArtifactButton {
+    color: $grey-shade;
+    border: none;
+    font-size: 18px;
+
+    &:hover:not(:disabled) {
+        color: #b3261e;
+    }
+}

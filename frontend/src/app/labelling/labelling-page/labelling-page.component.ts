@@ -3,7 +3,9 @@
  * @author T. Bradley
  * @author Jarl Jansen
  */
-import { Component, EventEmitter, OnInit } from '@angular/core';
+import { Component, EventEmitter, OnDestroy, OnInit } from '@angular/core';
+import { Subscription } from 'rxjs';
+import { MarkdownPreferenceService } from 'app/markdown/markdown-preference.service';
 import { NgbModal } from '@ng-bootstrap/ng-bootstrap';
 import { LabelFormComponent } from 'app/modals/label-form/label-form.component';
 import { LabellingDataService } from 'app/services/labelling-data.service';
@@ -22,7 +24,7 @@ import { ProjectDataService } from 'app/services/project-data.service';
   templateUrl: './labelling-page.component.html',
   styleUrls: ['./labelling-page.component.scss'],
 })
-export class LabellingPageComponent implements OnInit {
+export class LabellingPageComponent implements OnInit, OnDestroy {
   /**
    * Information for the screen
    */
@@ -60,6 +62,13 @@ export class LabellingPageComponent implements OnInit {
   hidden = false;
 
   /**
+   * Whether the artifact text is shown formatted as markdown.
+   * Splitting needs the raw text, so the selection is cleared when formatting is turned on.
+   */
+  renderMarkdown = true;
+  private markdownSubscription: Subscription;
+
+  /**
    * Constructor passes in the modal service and the labelling data service
    * @param modalService
    * @param labellingDataService
@@ -71,8 +80,15 @@ export class LabellingPageComponent implements OnInit {
     private router: Router,
     private toastCommService: ToastCommService,
     private accountService: AccountInfoService,
-    private projectDataService: ProjectDataService
+    private projectDataService: ProjectDataService,
+    private markdownPreference: MarkdownPreferenceService
   ) {
+    this.markdownSubscription = this.markdownPreference.enabled.subscribe(value => {
+      this.renderMarkdown = value;
+      if (value) {
+        this.hightlightedText = '';
+      }
+    });
     /**
      * Preparing variables for information
      */
@@ -94,6 +110,10 @@ export class LabellingPageComponent implements OnInit {
     this.routeService = new ReroutingService();
     this.url = this.router.url;
     this.p_id = parseInt(this.routeService.getProjectID(this.url));
+  }
+
+  ngOnDestroy(): void {
+    this.markdownSubscription.unsubscribe();
   }
 
   async ngOnInit(): Promise<void> {

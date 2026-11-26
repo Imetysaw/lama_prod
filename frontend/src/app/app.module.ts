@@ -54,6 +54,9 @@ import { ToastCommService } from './services/toast-comm.service';
 // Account moderation imports
 import { ModerationComponent } from './account-details/moderation/moderation.component';
 import { ConfirmModalComponent } from './modals/confirm-modal/confirm-modal.component';
+// Markdown rendering of artifacts
+import { MarkdownPipe } from './markdown/markdown.pipe';
+import { MarkdownToggleComponent } from './markdown/markdown-toggle.component';
 
 /* Imports bootstrap */
 import { NgbModule } from '@ng-bootstrap/ng-bootstrap';
@@ -109,7 +112,10 @@ import { UserApprovalComponent } from './account-details/user-approval/user-appr
     ToastGlobalComponent,
     ToastsContainer,
     ConfirmModalComponent,
-    UserApprovalComponent
+    UserApprovalComponent,
+    // Markdown rendering of artifact text
+    MarkdownPipe,
+    MarkdownToggleComponent
   ],
   imports: [
     BrowserModule,

@@ -12,13 +12,23 @@
       </div>
     </div>
   </div>
+  <!-- Markdown toggle -->
+  <div class="row" id="artifactToolbar">
+    <div class="col">
+      <app-markdown-toggle></app-markdown-toggle>
+      <span *ngIf="renderMarkdown" class="splitHint">Turn formatting off to select text for splitting</span>
+    </div>
+  </div>
   <!-- Row containing the artifact -->
   <div class="row">
     <!-- Div containing the artifact -->
     <div class="artifactContainer" id="artifactContainer">
-      <p (mouseup)="selectedText()" (mousedown)="selectedText()">
+      <!-- Raw text: selecting text here allows splitting the artifact (the selection
+           offsets are positions in the raw text, so this only works without formatting) -->
+      <p *ngIf="!renderMarkdown" (mouseup)="selectedText()" (mousedown)="selectedText()">
         {{ artifact?.getData()! }}
       </p>
+      <div *ngIf="renderMarkdown" class="markdown-body" [innerHTML]="artifact?.getData() | markdown"></div>
     </div>
 
     <!-- Labeller information -->

@@ -117,3 +117,14 @@
     overflow-y: scroll;
     overflow-x: hidden
 }
+// Markdown toggle and delete button above the artifact
+#artifactToolbar {
+    padding-top: 6px;
+    padding-bottom: 6px;
+}
+
+// Label type added after the user labelled this artifact
+.notLabelled {
+    font-style: italic;
+    color: #6c757d;
+}

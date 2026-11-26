@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnDestroy, OnInit } from '@angular/core';
 import { NgbModal } from '@ng-bootstrap/ng-bootstrap';
 import { ArtifactDataService } from 'app/services/artifact-data.service';
 import { LabellingDataService } from 'app/services/labelling-data.service';
@@ -11,13 +11,17 @@ import { LabelType } from 'app/classes/label-type';
 import { User } from 'app/classes/user';
 import { Label } from 'app/classes/label';
 import { ProjectDataService } from 'app/services/project-data.service';
+import { Subscription } from 'rxjs';
+import { ConfirmModalComponent } from 'app/modals/confirm-modal/confirm-modal.component';
+import { MarkdownPreferenceService } from 'app/markdown/markdown-preference.service';
+import { serverErrorMessage } from 'app/classes/errors';
 
 @Component({
   selector: 'app-single-artifact-view',
   templateUrl: './single-artifact-view.component.html',
   styleUrls: ['./single-artifact-view.component.scss']
 })
-export class SingleArtifactViewComponent implements OnInit {
+export class SingleArtifactViewComponent implements OnInit, OnDestroy {
 
   // Initialize the ReroutingService
   routeService: ReroutingService;
@@ -44,6 +48,9 @@ export class SingleArtifactViewComponent implements OnInit {
   changed: boolean;
   // Whether the project is frozen
   frozen = true;
+  // Whether the artifact text is shown formatted as markdown
+  renderMarkdown = true;
+  private markdownSubscription: Subscription;
 
   /**
      * Constructor passes in the modal service and the artifact service,
@@ -57,7 +64,9 @@ export class SingleArtifactViewComponent implements OnInit {
     private labellingDataService: LabellingDataService,
     private toastCommService: ToastCommService,
     private router: Router,
-    private projectDataService: ProjectDataService) {
+    private projectDataService: ProjectDataService,
+    private markdownPreference: MarkdownPreferenceService) {
+    this.markdownSubscription = this.markdownPreference.enabled.subscribe(value => this.renderMarkdown = value);
     // Initializing variables
     this.routeService = new ReroutingService();
     this.artifact = new StringArtifact(0, 'null', 'null');
@@ -188,5 +197,30 @@ export class SingleArtifactViewComponent implements OnInit {
       this.toastCommService.emitChange([false, "Something went wrong while saving."]);
     }
     this.ngOnInit();
+  }
+
+  /**
+   * Deletes this artifact after confirmation, then returns to the artifact management page
+   * @trigger admin clicks the "Delete artifact" button
+   */
+  deleteArtifact(): void {
+    const modalRef = this.modalService.open(ConfirmModalComponent, {});
+    modalRef.componentInstance.message =
+      `Artifact ${this.a_id} will be deleted permanently, together with all its labellings ` +
+      `and every artifact that was split from it.`;
+    modalRef.componentInstance.confirmEvent.subscribe(async () => {
+      try {
+        const deleted = await this.artifactDataService.deleteArtifacts(this.p_id, [this.a_id]);
+        this.toastCommService.emitChange([true,
+          deleted.length > 1 ? `Deleted artifacts ${deleted.join(', ')}` : `Deleted artifact ${this.a_id}`]);
+        this.router.navigate(['/project', this.p_id, 'artifactmanagement']);
+      } catch (e) {
+        this.toastCommService.emitChange([false, serverErrorMessage(e, 'The artifact could not be deleted')]);
+      }
+    });
+  }
+
+  ngOnDestroy(): void {
+    this.markdownSubscription.unsubscribe();
   }
 }

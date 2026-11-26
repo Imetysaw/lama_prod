@@ -13,10 +13,24 @@
         </div>
     </div>
 
+    <!-- Markdown toggle and delete button -->
+    <div class="row align-items-center" id="artifactToolbar">
+        <div class="col">
+            <app-markdown-toggle></app-markdown-toggle>
+        </div>
+        <div class="col text-end">
+            <button *ngIf="admin" type="button" class="btn btn-outline-danger btn-sm" id="deleteArtifactButton"
+                [disabled]="frozen" (click)="deleteArtifact()">
+                <em class="bi bi-trash"></em> Delete artifact
+            </button>
+        </div>
+    </div>
+
     <!-- Container for Artifact -->
     <div class="row">
         <div class="artifactContainer" id="artifactContainer">
-            <p>{{ artifact.getData() }}</p>
+            <p *ngIf="!renderMarkdown">{{ artifact.getData() }}</p>
+            <div *ngIf="renderMarkdown" class="markdown-body" [innerHTML]="artifact.getData() | markdown"></div>
         </div>
         <div class="row">
 
@@ -73,7 +87,11 @@
                                                     </p>
                                                 </div>
                                                 <!--Dropdown with label given and labels by label type-->
-                                                <div class="col-sm-8">
+                                                <!-- Label type that was added after this user labelled the artifact -->
+                                                <div class="col-sm-8" *ngIf="!userLabels[user.getUsername()]?.[labeltype.getName()]">
+                                                    <p class="notLabelled">Not labelled</p>
+                                                </div>
+                                                <div class="col-sm-8" *ngIf="userLabels[user.getUsername()]?.[labeltype.getName()]">
                                                     <!-- If the current user doesn't have permission to modify the dropdown, then it is disabled -->
                                                     <select class="form-control" name="labels" id="formControl"
                                                         #changedLabel

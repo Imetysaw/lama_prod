@@ -160,12 +160,52 @@
                         <!-- All label types in the project -->
                         <div id="labelTypeDiv">
                             <div id="labelTypeList">
-                                <form id="labelTypeForm">
-                                    <div *ngFor="let labelType of labelTypes">
-                                        <!-- Text field for the label type -->
-                                        {{labelType}}
+                                <div *ngFor="let labelType of labelTypes" class="row align-items-center labelTypeRow">
+                                    <!-- Renaming this label type -->
+                                    <ng-container *ngIf="renamingLabelTypeId == labelType.id">
+                                        <div class="col">
+                                            <input #renameInput type="text" class="form-control form-control-sm"
+                                                id="{{ 'renameLabelType-' + labelType.id }}" maxlength="64"
+                                                [value]="labelType.name" [disabled]="labelTypeBusy"
+                                                (keyup.enter)="renameLabelType(labelType, renameInput)"
+                                                (keyup.escape)="cancelRenameLabelType()">
+                                        </div>
+                                        <div class="col-auto">
+                                            <i class="bi bi-check-lg labelTypeAction" ngbTooltip="Save name"
+                                                (click)="renameLabelType(labelType, renameInput)"></i>
+                                            <i class="bi bi-x-lg labelTypeAction" ngbTooltip="Cancel"
+                                                (click)="cancelRenameLabelType()"></i>
+                                        </div>
+                                    </ng-container>
+                                    <!-- Showing this label type -->
+                                    <ng-container *ngIf="renamingLabelTypeId != labelType.id">
+                                        <div class="col">
+                                            {{ labelType.name }}
+                                            <span class="labelTypeCounts">({{ labelType.nLabels }} labels)</span>
+                                        </div>
+                                        <div class="col-auto">
+                                            <i class="bi bi-pencil labelTypeAction" ngbTooltip="Rename"
+                                                id="{{ 'renameLabelTypeButton-' + labelType.id }}"
+                                                (click)="startRenameLabelType(labelType)"></i>
+                                            <i *ngIf="labelTypes.length > 1" class="bi bi-trash labelTypeAction"
+                                                ngbTooltip="Delete" id="{{ 'deleteLabelTypeButton-' + labelType.id }}"
+                                                (click)="deleteLabelType(labelType)"></i>
+                                        </div>
+                                    </ng-container>
+                                </div>
+                                <!-- New label type -->
+                                <div class="row align-items-center labelTypeRow" id="newLabelTypeRow">
+                                    <div class="col">
+                                        <input #newLabelType type="text" class="form-control form-control-sm"
+                                            id="newLabelTypeInput" placeholder="New label type" maxlength="64"
+                                            [disabled]="labelTypeBusy" (keyup.enter)="addLabelType(newLabelType)">
                                     </div>
-                                </form>
+                                    <div class="col-auto">
+                                        <i class="bi bi-plus-lg labelTypeAction" ngbTooltip="Add label type"
+                                            id="addLabelTypeButton" (click)="addLabelType(newLabelType)"></i>
+                                    </div>
+                                </div>
+                                <p class="labelTypeHint">Label type changes are saved immediately.</p>
                             </div>
                         </div>
                     </div>
@@ -324,7 +364,7 @@
                             <div id="labelTypeList" *ngFor="let labelType of labelTypes">
                                 <div>
                                     <!-- Text field for the label type -->
-                                    {{ labelType }}
+                                    {{ labelType.name }}
                                 </div>
                             </div>
                         </div>

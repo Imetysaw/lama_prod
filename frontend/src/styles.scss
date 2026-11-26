@@ -14,3 +14,77 @@ $offgrey-shade: #1C5858;
 .btn-primary, .btn-primary:hover, .btn-primary:active, .btn-primary:visited {
     background-color: $orange-shade !important;
 }
+
+// Artifact text rendered as markdown (see app/markdown). Global, because the HTML is
+// inserted with [innerHTML] and component styles do not apply to it.
+.markdown-body {
+    font-size: 15px;
+    line-height: 1.5;
+    overflow-wrap: break-word;
+    text-align: left;
+
+    h1, h2, h3, h4, h5, h6 {
+        margin: 0.9em 0 0.4em;
+        font-weight: 600;
+        line-height: 1.25;
+    }
+    h1 { font-size: 1.5em; }
+    h2 { font-size: 1.3em; }
+    h3 { font-size: 1.15em; }
+    h4, h5, h6 { font-size: 1em; }
+
+    p, ul, ol, pre, table, blockquote {
+        margin: 0 0 0.75em;
+    }
+    ul, ol {
+        padding-left: 1.6em;
+    }
+    hr {
+        margin: 1em 0;
+        opacity: 0.35;
+    }
+    code {
+        padding: 0.1em 0.35em;
+        border-radius: 4px;
+        background-color: rgba($grey-shade, 0.08);
+        color: #b3261e;
+        font-size: 0.9em;
+    }
+    pre {
+        padding: 0.75em 1em;
+        border-radius: 6px;
+        background-color: #f4f5f6;
+        overflow-x: auto;
+
+        code {
+            padding: 0;
+            background: none;
+            color: inherit;
+        }
+    }
+    blockquote {
+        padding-left: 1em;
+        border-left: 3px solid rgba($grey-shade, 0.3);
+        color: #555;
+    }
+    table {
+        display: block;
+        max-width: 100%;
+        overflow-x: auto;
+        border-collapse: collapse;
+    }
+    th, td {
+        padding: 0.3em 0.75em;
+        border: 1px solid #d0d4d6;
+    }
+    th {
+        background-color: #f4f5f6;
+        font-weight: 600;
+    }
+    a {
+        color: $orange-shade;
+    }
+    > :last-child {
+        margin-bottom: 0;
+    }
+}

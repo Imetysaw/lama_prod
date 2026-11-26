@@ -1,3 +1,4 @@
+import { EventEmitter } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { RouterTestingModule } from '@angular/router/testing';
 import { ProjectSettingsComponent } from './project-settings.component';
@@ -168,7 +169,7 @@ describe('ProjectSettingsComponent', () => {
     expect(component.superAdminID).toEqual(1);
 
     // Checks whether the labelTypes are correct
-    expect(component.labelTypes).toEqual(["lt1"]);
+    expect(component.labelTypes).toEqual([{id: 1, name: "lt1", nLabels: 0, nLabellings: 0}]);
   });
 
   it('should get the current project, but an error occurs', async () => {
@@ -565,5 +566,49 @@ describe('ProjectSettingsComponent', () => {
     expect(modal_spy).toHaveBeenCalledWith(AddUsersModalComponent);
     // Check that addMember is not called
     expect(member_spy).not.toHaveBeenCalled();
+  })
+
+  // Adding a label type calls the backend and reloads the label types
+  it('should add a label type', async () => {
+    const postSpy = spyOn(component.requestHandler, 'post').and.returnValue(Promise.resolve({}));
+    const reloadSpy = spyOn(component, 'reloadLabelTypes').and.returnValue(Promise.resolve());
+    component.labelTypes = [{id: 1, name: 'Emotion', nLabels: 2, nLabellings: 4}];
+
+    const input = document.createElement('input');
+    input.value = ' Sentiment ';
+    await component.addLabelType(input);
+
+    expect(postSpy).toHaveBeenCalledWith('/labeltype/create', {'p_id': component.currentProject.getId(), 'name': 'Sentiment'}, true);
+    expect(reloadSpy).toHaveBeenCalled();
+    expect(input.value).toEqual('');
+
+    // Duplicate names are refused without asking the backend
+    postSpy.calls.reset();
+    input.value = 'Emotion';
+    await component.addLabelType(input);
+    expect(postSpy).not.toHaveBeenCalled();
+  })
+
+  // Deleting a label type asks for confirmation first, and the last label type cannot be deleted
+  it('should delete a label type after confirmation', async () => {
+    const confirmEvent = new EventEmitter<boolean>();
+    const openSpy = spyOn(modalService, 'open').and.returnValue({componentInstance: {confirmEvent: confirmEvent}} as any);
+    const postSpy = spyOn(component.requestHandler, 'post').and.returnValue(Promise.resolve('Label type deleted'));
+    spyOn(component, 'reloadLabelTypes').and.returnValue(Promise.resolve());
+    const lt1 = {id: 1, name: 'Emotion', nLabels: 2, nLabellings: 4};
+    const lt2 = {id: 2, name: 'Topic', nLabels: 0, nLabellings: 0};
+
+    component.labelTypes = [lt1];
+    component.deleteLabelType(lt1);
+    expect(openSpy).not.toHaveBeenCalled();
+
+    component.labelTypes = [lt1, lt2];
+    component.deleteLabelType(lt1);
+    expect(openSpy).toHaveBeenCalled();
+    expect(postSpy).not.toHaveBeenCalled();
+
+    confirmEvent.emit(true);
+    await new Promise(resolve => setTimeout(resolve));
+    expect(postSpy).toHaveBeenCalledWith('/labeltype/delete', {'p_id': component.currentProject.getId(), 'lt_id': 1}, true);
   })
 });

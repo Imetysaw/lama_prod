@@ -11,6 +11,18 @@ import { EditModeService } from 'app/services/edit-mode.service';
 import { AddUsersModalComponent } from 'app/modals/add-users-modal/add-users-modal.component';
 import { RequestHandler } from 'app/classes/RequestHandler';
 import { ToastCommService } from 'app/services/toast-comm.service';
+import { ConfirmModalComponent } from 'app/modals/confirm-modal/confirm-modal.component';
+import { serverErrorMessage } from 'app/classes/errors';
+
+/* A label type as shown in the project settings */
+export interface LabelTypeSetting {
+  id: number;
+  name: string;
+  /* Number of labels of this type */
+  nLabels: number;
+  /* Number of labellings that use this type */
+  nLabellings: number;
+}
 
 /* Project settings component */
 @Component({
@@ -50,7 +62,13 @@ export class ProjectSettingsComponent implements OnInit {
   removedMembers: Record<number, any> = {};
 
   /* Array of label types for project */
-  labelTypes: string[] = [];
+  labelTypes: LabelTypeSetting[] = [];
+
+  /* Label type that is being renamed (null if none) */
+  renamingLabelTypeId: number | null = null;
+
+  /* Whether a label type request is in progress */
+  labelTypeBusy = false;
   /* Boolean showing if the page is in edit mode, default is false */
   isInEditMode = false;
 
@@ -194,10 +212,7 @@ export class ProjectSettingsComponent implements OnInit {
       this.currentProject.setUsers(this.projectMembers);
 
       //Setting current project's label types list
-      let labeltypesOfProject = result.labelType;
-      for (let labelType of labeltypesOfProject) {
-        this.labelTypes.push(labelType.label_type_name);
-      }
+      this.labelTypes = this.parseLabelTypes(result.labelType);
 
       //Setting values of the forms based on the current project's existing information
       this.projectForm.setValue({
@@ -251,6 +266,127 @@ export class ProjectSettingsComponent implements OnInit {
       this.toastCommService.emitChange([false, message]);
       this.unclickEdit();
     }
+  }
+
+  /**
+   * Converts the label types sent by the backend
+   * @param labelTypes the labelType list of the /project/settings response
+   */
+  parseLabelTypes(labelTypes: any[]): LabelTypeSetting[] {
+    return (labelTypes ?? []).map((labelType: any) => ({
+      id: labelType.label_type_id,
+      name: labelType.label_type_name,
+      nLabels: labelType.n_labels ?? 0,
+      nLabellings: labelType.n_labellings ?? 0,
+    }));
+  }
+
+  /**
+   * Reloads the label types from the backend (after one was added, renamed or deleted)
+   */
+  async reloadLabelTypes(): Promise<void> {
+    const result = await this.requestHandler.get("/project/settings", {'p_id': this.currentProject.getId()}, true);
+    this.labelTypes = this.parseLabelTypes(result.labelType);
+  }
+
+  /**
+   * Adds a label type to the project. Saved immediately, not with the "Save" button.
+   * @param input the text field with the name of the new label type
+   * @trigger "+" button next to the new label type field is clicked, or enter is pressed
+   */
+  async addLabelType(input: HTMLInputElement): Promise<void> {
+    const name = input.value.trim();
+    if (!name) {
+      this.toastCommService.emitChange([false, "Enter a name for the new label type"]);
+      return;
+    }
+    if (this.labelTypes.some(labelType => labelType.name == name)) {
+      this.toastCommService.emitChange([false, "A label type with this name already exists"]);
+      return;
+    }
+    this.labelTypeBusy = true;
+    try {
+      await this.requestHandler.post("/labeltype/create", {'p_id': this.currentProject.getId(), 'name': name}, true);
+      input.value = '';
+      this.toastCommService.emitChange([true, `Label type "${name}" added. Add labels for it on the label management page.`]);
+      await this.reloadLabelTypes();
+    } catch (e) {
+      this.toastCommService.emitChange([false, serverErrorMessage(e, "The label type could not be added")]);
+    } finally {
+      this.labelTypeBusy = false;
+    }
+  }
+
+  /**
+   * Starts renaming a label type
+   * @param labelType the label type to rename
+   */
+  startRenameLabelType(labelType: LabelTypeSetting): void {
+    this.renamingLabelTypeId = labelType.id;
+  }
+
+  /**
+   * Cancels renaming a label type
+   */
+  cancelRenameLabelType(): void {
+    this.renamingLabelTypeId = null;
+  }
+
+  /**
+   * Renames a label type. Saved immediately, not with the "Save" button.
+   * @param labelType the label type to rename
+   * @param input the text field with the new name
+   */
+  async renameLabelType(labelType: LabelTypeSetting, input: HTMLInputElement): Promise<void> {
+    const name = input.value.trim();
+    if (name == labelType.name) {
+      this.renamingLabelTypeId = null;
+      return;
+    }
+    if (!name) {
+      this.toastCommService.emitChange([false, "The label type name cannot be empty"]);
+      return;
+    }
+    this.labelTypeBusy = true;
+    try {
+      await this.requestHandler.patch("/labeltype/rename",
+        {'p_id': this.currentProject.getId(), 'lt_id': labelType.id, 'name': name}, true);
+      this.renamingLabelTypeId = null;
+      this.toastCommService.emitChange([true, `Label type renamed to "${name}"`]);
+      await this.reloadLabelTypes();
+    } catch (e) {
+      this.toastCommService.emitChange([false, serverErrorMessage(e, "The label type could not be renamed")]);
+    } finally {
+      this.labelTypeBusy = false;
+    }
+  }
+
+  /**
+   * Deletes a label type with its labels and labellings, after confirmation
+   * @param labelType the label type to delete
+   */
+  deleteLabelType(labelType: LabelTypeSetting): void {
+    if (this.labelTypes.length <= 1) {
+      this.toastCommService.emitChange([false, "A project needs at least one label type"]);
+      return;
+    }
+    const modalRef = this.modalService.open(ConfirmModalComponent, {});
+    modalRef.componentInstance.message =
+      `Label type "${labelType.name}" will be deleted permanently, together with its ` +
+      `${labelType.nLabels} label(s) and ${labelType.nLabellings} labelling(s) made with them.`;
+    modalRef.componentInstance.confirmEvent.subscribe(async () => {
+      this.labelTypeBusy = true;
+      try {
+        await this.requestHandler.post("/labeltype/delete",
+          {'p_id': this.currentProject.getId(), 'lt_id': labelType.id}, true);
+        this.toastCommService.emitChange([true, `Label type "${labelType.name}" deleted`]);
+        await this.reloadLabelTypes();
+      } catch (e) {
+        this.toastCommService.emitChange([false, serverErrorMessage(e, "The label type could not be deleted")]);
+      } finally {
+        this.labelTypeBusy = false;
+      }
+    });
   }
 
   /**

@@ -193,6 +193,17 @@ After participating in a project, for any functionality first artifacts have to 
 
 ![alt text](https://github.com/muctadir/lama/blob/main/images/SS3M.png?raw=true)
 
+Project admins can delete artifacts with the **trash icon** in the artifact list, or with the **Delete artifact** button when viewing an artifact. Deleting an artifact also deletes its labellings, its change history and every artifact that was split from it. This cannot be undone.
+
+#### Markdown formatting
+
+Artifacts that contain markdown, such as LLM conversations, are shown formatted (headings, lists, code blocks, tables) on the artifact management page, the artifact view and the labelling page. The **Format markdown** switch above the artifact text turns this on or off; the choice is remembered in the browser.
+
+* Text that stores newlines as a literal `\n` (and has no real newlines) is shown with real line breaks.
+* Conversation turns separated by `|||` are shown with a line in between, and a leading `USER:`/`ASSISTANT:` is shown in bold.
+* Images are not shown and links open in a new tab. Scripts and other HTML are removed from the formatted text.
+* Splitting an artifact needs the raw text, so turn formatting off on the labelling page to select a segment.
+
 ### Labelling an artifact
 
 After having uploaded artifacts it is possible to start labelling them. Navigate using the **navigation menu** on the left to the **labelling page**. An artifact will be shown here. To label an artifact, select labels from the **dropdown menu** below the artifact text.
@@ -203,7 +214,12 @@ New labels can be created using the **add label** button above the dropdown menu
 
 ![alt text](https://github.com/muctadir/lama/blob/main/images/SS5M.png?raw=true)
 
-_Note: Labels have a label type, this is a way grouping of labels. To label an artifact the user should select a label from each label type. Label types are specified during the project creation, and are not adjustable afterwards._
+_Note: Labels have a label type, this is a way grouping of labels. To label an artifact the user should select a label from each label type. Label types are specified during the project creation._
+
+Project admins can change the label types later in the **project settings** (gear icon, then **Edit**). In the **Label Type** section you can add a label type, rename one (pencil icon) or delete one (trash icon). These changes are saved immediately; they do not need the **Save** button.
+
+* A new label type has no labels yet: create them on the label management page or with **Create label** on the labelling page. Artifacts that were labelled before the label type existed show "Not labelled" for it.
+* Deleting a label type permanently deletes its labels and every labelling made with them. A project always keeps at least one label type.
 
 ### Conflict resolution
 

@@ -41,3 +41,10 @@ $orange-shade: #ed5a06;
 .btn:focus {
     box-shadow: none;
 }
+// Optional explanation below the header
+#confirm-message {
+    text-align: center;
+    padding-top: 10px;
+    margin-bottom: 0;
+    white-space: pre-line;
+}

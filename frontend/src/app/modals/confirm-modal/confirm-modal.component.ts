@@ -1,4 +1,4 @@
-import { Component, EventEmitter, Output } from '@angular/core';
+import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { Router } from '@angular/router';
 import { NgbActiveModal } from '@ng-bootstrap/ng-bootstrap';
 
@@ -9,6 +9,8 @@ import { NgbActiveModal } from '@ng-bootstrap/ng-bootstrap';
 })
 export class ConfirmModalComponent {
   @Output() confirmEvent = new EventEmitter<boolean>();
+  // Optional explanation shown below "Are you sure?", e.g. what will be deleted
+  @Input() message = '';
 
   /**
    * Initializes the NgbActiveModal and the router

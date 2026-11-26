@@ -249,10 +249,25 @@ def get_project(*, user):
         select(LabelType).where(LabelType.p_id == args['p_id'])
     ).all()
 
+    # Number of (non-deleted) labels and of labellings per label type, so the frontend can
+    # warn about what is lost when a label type is deleted
+    label_counts = dict(db.session.execute(
+        select(Label.lt_id, func.count(Label.id))
+        .where(Label.p_id == args['p_id'], Label.deleted == False)
+        .group_by(Label.lt_id)
+    ).all())
+    labelling_counts = dict(db.session.execute(
+        select(Labelling.lt_id, func.count())
+        .where(Labelling.p_id == args['p_id'])
+        .group_by(Labelling.lt_id)
+    ).all())
+
     # Send the label type object
     label_type_data = [{
         'label_type_id': labelType.id,
-        'label_type_name': labelType.name
+        'label_type_name': labelType.name,
+        'n_labels': label_counts.get(labelType.id, 0),
+        'n_labellings': labelling_counts.get(labelType.id, 0)
     } for labelType in label_types]
 
     # Convert the list of dictionaries containing project information to json
